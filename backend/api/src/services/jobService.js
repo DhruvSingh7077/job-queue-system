@@ -5,35 +5,47 @@ const { getChannel } = require("../rabbitmq");
 async function createJob(payload) {
   const jobId = uuidv4();
 
-  const job = {
+   const job = {
     id: jobId,
     type: "email",
     payload,
-    status: "PENDING"
+    status: "PENDING",
+    createdAt: new Date().toISOString()
   };
-
+  // store job in redis
   await redis.set(`job:${jobId}`, JSON.stringify(job));
-
+ 
+ // publish job
   const channel = getChannel();
   channel.sendToQueue(
-    "email_queue",
+    process.env.QUEUE_EMAIL,
     Buffer.from(JSON.stringify(job)),
     { persistent: true }
   );
 
   return job;
 }
+async function getJobById(jobId) {
+  const job = await redis.get(`job:${jobId}`);
+  if (!job) return null;
+  return JSON.parse(job);
+}
+
 
 async function getAllJobs() {
   const keys = await redis.keys("job:*");
   const jobs = [];
 
   for (const key of keys) {
-    const data = await redis.get(key);
-    jobs.push(JSON.parse(data));
+    const job = await redis.get(key);
+    jobs.push(JSON.parse(job));
   }
 
   return jobs;
 }
 
-module.exports = { createJob, getAllJobs };
+module.exports = {
+  createJob,
+  getJobById,
+  getAllJobs
+};

@@ -1,33 +1,57 @@
+require("dotenv").config();
 const connectRabbitMQ = require("./rabbitmq");
 const redis = require("./redis");
-require("dotenv").config();
 
 async function startWorker() {
   const channel = await connectRabbitMQ();
 
-  channel.consume("email_queue", async (msg) => {
-    const job = JSON.parse(msg.content.toString());
-    console.log("Processing job:", job.id);
+channel.consume(process.env.QUEUE_EMAIL, async (msg) => {
+  const incomingJob = JSON.parse(msg.content.toString());
+  const jobKey = `job:${incomingJob.id}`;
 
-    try {
+  console.log("Processing job:", incomingJob.id);
+  try {
+    // fetch latest job from Redis (source of truth)
+      const storedJob = await redis.get(jobKey);
+
+      if (!storedJob) {
+        throw new Error("Job not found in Redis");
+      }
+
+      const currentJob = JSON.parse(storedJob);
+
+ // update status → PROCESSING
       await redis.set(
-        `job:${job.id}`,
-        JSON.stringify({ ...job, status: "PROCESSING" })
+        jobKey,
+        JSON.stringify({ ...currentJob, status: "PROCESSING" })
       );
 
-      // simulate work
-      await new Promise((res) => setTimeout(res, 2000));
+    // simulate work
+    await new Promise((res)=> setTimeout(res, 2000));
 
-      await redis.set(
-        `job:${job.id}`,
-        JSON.stringify({ ...job, status: "COMPLETED" })
-      );
+    //update status -> COMPLETED
+    await redis.set(
+      jobKey,
+      JSON.stringify({ ...currentJob, status: "COMPLETED" })
+    );
+ console.log("Job completed:", incomingJob.id);
 
       channel.ack(msg);
-      console.log("Job completed:", job.id);
     } catch (err) {
-      console.error("Job failed:", err);
-      channel.nack(msg);
+      console.error("Job failed:", incomingJob.id, err.message);
+
+    
+        const storedJob = await redis.get(jobKey);
+      if (storedJob) {
+        const currentJob = JSON.parse(storedJob);
+        await redis.set(
+          jobKey,
+          JSON.stringify({ ...currentJob, status: "FAILED" })
+        );
+      }
+
+      // reject message (no retry yet)
+      channel.nack(msg, false, false);
     }
   });
 }
