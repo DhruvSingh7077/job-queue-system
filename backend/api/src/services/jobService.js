@@ -10,8 +10,10 @@ async function createJob(payload) {
     type: "email",
     payload,
     status: "PENDING",
+    retryCount: 0,
+    maxRetries: 3,
     createdAt: new Date().toISOString()
-  };
+};
   // store job in redis
   await redis.set(`job:${jobId}`, JSON.stringify(job));
  

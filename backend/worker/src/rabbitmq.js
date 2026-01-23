@@ -5,6 +5,9 @@ async function connectRabbitMQ(retries = 5) {
     const connection = await amqp.connect(process.env.RABBITMQ_URL);
     const channel = await connection.createChannel();
     await channel.assertQueue(process.env.QUEUE_EMAIL, { durable: true });
+    await channel.assertQueue(`${process.env.QUEUE_EMAIL}_dlq`, {
+  durable: true
+});
     console.log("✅ Worker connected to RabbitMQ");
     return channel;
   } catch (err) {

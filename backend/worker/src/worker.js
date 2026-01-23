@@ -28,7 +28,7 @@ channel.consume(process.env.QUEUE_EMAIL, async (msg) => {
 
     // simulate work
     await new Promise((res)=> setTimeout(res, 2000));
-
+  
     //update status -> COMPLETED
     await redis.set(
       jobKey,
@@ -37,23 +37,57 @@ channel.consume(process.env.QUEUE_EMAIL, async (msg) => {
  console.log("Job completed:", incomingJob.id);
 
       channel.ack(msg);
-    } catch (err) {
-      console.error("Job failed:", incomingJob.id, err.message);
+    }catch (err) {
+  console.error("Job failed:", incomingJob.id, err.message);
 
-    
-        const storedJob = await redis.get(jobKey);
-      if (storedJob) {
-        const currentJob = JSON.parse(storedJob);
-        await redis.set(
-          jobKey,
-          JSON.stringify({ ...currentJob, status: "FAILED" })
-        );
-      }
+  const storedJob = await redis.get(jobKey);
+  if (!storedJob) {
+    channel.nack(msg, false, false);
+    return;
+  }
 
-      // reject message (no retry yet)
-      channel.nack(msg, false, false);
-    }
-  });
+  const currentJob = JSON.parse(storedJob);
+  const retryCount = currentJob.retryCount + 1;
+
+  if (retryCount <= currentJob.maxRetries) {
+    // update retry count
+    await redis.set(
+      jobKey,
+      JSON.stringify({
+        ...currentJob,
+        status: "FAILED",
+        retryCount
+      })
+    );
+
+    console.log(
+      `Retrying job ${incomingJob.id} (${retryCount}/${currentJob.maxRetries})`
+    );
+
+    // requeue job
+    channel.nack(msg, false, true);
+  } else {
+    // move to DLQ
+    await redis.set(
+      jobKey,
+      JSON.stringify({
+        ...currentJob,
+        status: "DEAD_LETTER",
+        retryCount
+      })
+    );
+
+    channel.sendToQueue(
+      `${process.env.QUEUE_EMAIL}_dlq`,
+      Buffer.from(JSON.stringify(currentJob)),
+      { persistent: true }
+    );
+
+    console.log("Job moved to DLQ:", incomingJob.id);
+    channel.ack(msg);
+  }}
+})
+
 }
 
 startWorker();
