@@ -1,8 +1,15 @@
 const { v4: uuidv4 } = require("uuid");
 const redis = require("../redis");
 const { getChannel } = require("../rabbitmq");
+const {
+  jobsCreatedCounter,
+  jobCreationDuration
+} = require("../metrics");
+
 
 async function createJob(payload) {
+   const endTimer = jobCreationDuration.startTimer();
+
   const jobId = uuidv4();
 
    const job = {
@@ -24,6 +31,8 @@ async function createJob(payload) {
     Buffer.from(JSON.stringify(job)),
     { persistent: true }
   );
+   jobsCreatedCounter.inc(); //  increment metric
+  endTimer();               //  record duration
 
   return job;
 }
