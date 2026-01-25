@@ -2,50 +2,35 @@ const amqp = require("amqplib");
 
 let channel;
 
-/**
- * Connect to RabbitMQ with retry logic
- */
-async function connectRabbitMQ(retries = 5, delayMs = 5000) {
-  try {
-    console.log("🔌 Connecting to RabbitMQ...");
+async function connectRabbitMQ(retries = 10, delay = 5000) {
+  while (retries > 0) {
+    try {
+      console.log("🔌 Connecting to RabbitMQ...");
+      const connection = await amqp.connect(process.env.RABBITMQ_URL);
+      channel = await connection.createChannel();
 
-    const connection = await amqp.connect(process.env.RABBITMQ_URL);
-    channel = await connection.createChannel();
+      await channel.assertQueue(process.env.QUEUE_EMAIL, { durable: true });
+      await channel.assertQueue(`${process.env.QUEUE_EMAIL}_dlq`, {
+        durable: true,
+      });
 
-    await channel.assertQueue(process.env.QUEUE_EMAIL, {
-      durable: true
-    });
-
-    console.log("✅ Connected to RabbitMQ and queue asserted");
-  } catch (error) {
-    console.error(
-      `❌ RabbitMQ connection failed. Retries left: ${retries}`,
-      error.message
-    );
-
-    if (retries === 0) {
-      console.error("🚨 Could not connect to RabbitMQ. Exiting.");
-      throw error;
+      console.log("✅ Connected to RabbitMQ");
+      return channel;
+    } catch (err) {
+      retries--;
+      console.error(
+        `❌ RabbitMQ connection failed. Retries left: ${retries}`,
+        err.message
+      );
+      if (retries === 0) throw err;
+      await new Promise((res) => setTimeout(res, delay));
     }
-
-    console.log(`⏳ Retrying RabbitMQ connection in ${delayMs / 1000}s...`);
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-
-    return connectRabbitMQ(retries - 1, delayMs);
   }
 }
 
-/**
- * Get active RabbitMQ channel
- */
 function getChannel() {
-  if (!channel) {
-    throw new Error("RabbitMQ channel not initialized");
-  }
+  if (!channel) throw new Error("RabbitMQ channel not initialized");
   return channel;
 }
 
-module.exports = {
-  connectRabbitMQ,
-  getChannel
-};
+module.exports = { connectRabbitMQ, getChannel };

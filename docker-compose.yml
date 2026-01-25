@@ -32,6 +32,8 @@ services:
 
   worker:
     build: ./backend/worker
+    ports:
+      - "4000:4000"   # 🔥 REQUIRED FOR PROMETHEUS
     env_file:
       - ./backend/worker/.env
     depends_on:
@@ -49,6 +51,8 @@ services:
       - "9090:9090"
     depends_on:
       - api
+      - worker
+
   grafana:
     image: grafana/grafana:9.5.2
     container_name: grafana
