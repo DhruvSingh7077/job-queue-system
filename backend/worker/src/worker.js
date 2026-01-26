@@ -2,6 +2,7 @@ require("dotenv").config();
 const http = require("http");
 const connectRabbitMQ = require("./rabbitmq");
 const redis = require("./redis");
+const CircuitBreaker = require("./circuitBreaker");
 
 const {
   client,
@@ -11,7 +12,15 @@ const {
 } = require("./metrics");
 
 /**
- * Expose /metrics for Prometheus
+ * 🔁 Circuit Breaker (protects external service)
+ */
+const emailCircuitBreaker = new CircuitBreaker({
+  failureThreshold: 3,
+  cooldownPeriod: 15000, // 15 seconds
+});
+
+/**
+ * 📊 Expose /metrics for Prometheus
  */
 http
   .createServer(async (req, res) => {
@@ -33,10 +42,17 @@ async function startWorker() {
 
     console.log("Processing job:", incomingJob.id);
 
-    // 🔥 START TIMER (IMPORTANT)
+    // ⏱ Start processing timer
     const endTimer = jobProcessingDuration.startTimer();
 
     try {
+      /**
+       * 🚦 CIRCUIT BREAKER CHECK
+       */
+      if (!emailCircuitBreaker.canRequest()) {
+        throw new Error("Circuit open: email service unavailable");
+      }
+
       // fetch job from Redis
       const storedJob = await redis.get(jobKey);
       if (!storedJob) {
@@ -50,12 +66,21 @@ async function startWorker() {
         jobKey,
         JSON.stringify({ ...currentJob, status: "PROCESSING" })
       );
-// // 👇 ADD HERE
-// if (incomingJob.payload?.shouldFail === true) {
-//   throw new Error("Forced failure for testing");
-// }
+
+      /**
+       * 🌐 Simulate external email service
+       * 40% failure rate to trigger retries + circuit breaker
+       */
+      if (Math.random() < 0.4) {
+        emailCircuitBreaker.recordFailure();
+        throw new Error("Simulated email service failure");
+      }
+
       // simulate work
       await new Promise((res) => setTimeout(res, 2000));
+
+      // success → reset circuit breaker
+      emailCircuitBreaker.recordSuccess();
 
       // update status → COMPLETED
       await redis.set(
@@ -63,7 +88,7 @@ async function startWorker() {
         JSON.stringify({ ...currentJob, status: "COMPLETED" })
       );
 
-      // ✅ SUCCESS METRICS
+      // ✅ metrics
       jobsProcessedTotal.inc();
       endTimer();
 
@@ -72,7 +97,7 @@ async function startWorker() {
     } catch (err) {
       console.error("Job failed:", incomingJob.id, err.message);
 
-      // ❌ FAILURE METRICS
+      // ❌ metrics
       jobsFailedTotal.inc();
       endTimer();
 
@@ -86,7 +111,6 @@ async function startWorker() {
       const retryCount = currentJob.retryCount + 1;
 
       if (retryCount <= currentJob.maxRetries) {
-        // update retry count
         await redis.set(
           jobKey,
           JSON.stringify({
@@ -100,10 +124,9 @@ async function startWorker() {
           `Retrying job ${incomingJob.id} (${retryCount}/${currentJob.maxRetries})`
         );
 
-        // requeue job
+        // 🔁 requeue
         channel.nack(msg, false, true);
       } else {
-        // move to DLQ
         await redis.set(
           jobKey,
           JSON.stringify({
@@ -119,7 +142,7 @@ async function startWorker() {
           { persistent: true }
         );
 
-        console.log("Job moved to DLQ:", incomingJob.id);
+        console.log("☠️ Job moved to DLQ:", incomingJob.id);
         channel.ack(msg);
       }
     }
