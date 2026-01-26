@@ -3,6 +3,7 @@ const http = require("http");
 const connectRabbitMQ = require("./rabbitmq");
 const redis = require("./redis");
 const CircuitBreaker = require("./circuitBreaker");
+const { circuitBreakerState } = require("./metrics");
 
 const {
   client,
@@ -10,6 +11,15 @@ const {
   jobsFailedTotal,
   jobProcessingDuration,
 } = require("./metrics");
+
+function updateCircuitBreakerMetrics(breaker) {
+  circuitBreakerState.reset();
+
+  circuitBreakerState.set(
+    { state: breaker.getState() },
+    1
+  );
+}
 
 /**
  * 🔁 Circuit Breaker (protects external service)
@@ -50,8 +60,10 @@ async function startWorker() {
        * 🚦 CIRCUIT BREAKER CHECK
        */
       if (!emailCircuitBreaker.canRequest()) {
-        throw new Error("Circuit open: email service unavailable");
-      }
+  updateCircuitBreakerMetrics(emailCircuitBreaker); // 🔧
+  throw new Error("Circuit open: email service unavailable");
+}
+
 
       // fetch job from Redis
       const storedJob = await redis.get(jobKey);
@@ -72,15 +84,18 @@ async function startWorker() {
        * 40% failure rate to trigger retries + circuit breaker
        */
       if (Math.random() < 0.4) {
-        emailCircuitBreaker.recordFailure();
-        throw new Error("Simulated email service failure");
-      }
+  emailCircuitBreaker.recordFailure();
+  updateCircuitBreakerMetrics(emailCircuitBreaker); // 🔧
+  throw new Error("Simulated email service failure");
+}
 
       // simulate work
       await new Promise((res) => setTimeout(res, 2000));
 
       // success → reset circuit breaker
-      emailCircuitBreaker.recordSuccess();
+    emailCircuitBreaker.recordSuccess();
+updateCircuitBreakerMetrics(emailCircuitBreaker); // 🔧
+
 
       // update status → COMPLETED
       await redis.set(

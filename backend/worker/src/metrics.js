@@ -1,8 +1,8 @@
 const client = require("prom-client");
 
 // collect default system metrics
-client.collectDefaultMetrics();
-
+const collectDefaultMetrics = client.collectDefaultMetrics;
+collectDefaultMetrics();
 // jobs processed counter
 const jobsProcessedTotal = new client.Counter({
   name: "worker_jobs_processed_total",
@@ -21,10 +21,20 @@ const jobProcessingDuration = new client.Histogram({
   help: "Time taken to process a job",
   buckets: [0.5, 1, 2, 5, 10],
 });
+/**
+ *  NEW: Circuit Breaker State
+ */
+const circuitBreakerState = new client.Gauge({
+  name: "worker_circuit_breaker_state",
+  help: "Circuit breaker state (1 = active)",
+  labelNames: ["state"],
+});
+
 
 module.exports = {
   client,
   jobsProcessedTotal,
   jobsFailedTotal,
   jobProcessingDuration,
+  circuitBreakerState,
 };
