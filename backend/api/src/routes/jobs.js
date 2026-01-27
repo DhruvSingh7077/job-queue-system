@@ -9,7 +9,7 @@ async function routes(fastify) {
     const job = await createJob(request.body);
     reply.send(job);
   });
-
+ 
   fastify.get("/jobs", async () => {
     return getAllJobs();
   });

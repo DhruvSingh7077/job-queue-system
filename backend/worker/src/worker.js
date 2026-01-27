@@ -3,18 +3,21 @@ const http = require("http");
 const connectRabbitMQ = require("./rabbitmq");
 const redis = require("./redis");
 const CircuitBreaker = require("./circuitBreaker");
-const { circuitBreakerState } = require("./metrics");
+const { updateJobStatus } = require("./jobStatus");
 
 const {
   client,
   jobsProcessedTotal,
   jobsFailedTotal,
   jobProcessingDuration,
+  circuitBreakerState,
 } = require("./metrics");
 
+/**
+ * Update circuit breaker metric
+ */
 function updateCircuitBreakerMetrics(breaker) {
   circuitBreakerState.reset();
-
   circuitBreakerState.set(
     { state: breaker.getState() },
     1
@@ -26,7 +29,7 @@ function updateCircuitBreakerMetrics(breaker) {
  */
 const emailCircuitBreaker = new CircuitBreaker({
   failureThreshold: 3,
-  cooldownPeriod: 15000, // 15 seconds
+  cooldownPeriod: 15000,
 });
 
 /**
@@ -50,69 +53,66 @@ async function startWorker() {
     const incomingJob = JSON.parse(msg.content.toString());
     const jobKey = `job:${incomingJob.id}`;
 
-    console.log("Processing job:", incomingJob.id);
+    console.log("🔧 Processing job:", incomingJob.id);
 
-    // ⏱ Start processing timer
     const endTimer = jobProcessingDuration.startTimer();
 
     try {
       /**
-       * 🚦 CIRCUIT BREAKER CHECK
+       * 🚦 Circuit breaker check
        */
       if (!emailCircuitBreaker.canRequest()) {
-  updateCircuitBreakerMetrics(emailCircuitBreaker); // 🔧
-  throw new Error("Circuit open: email service unavailable");
-}
+        updateCircuitBreakerMetrics(emailCircuitBreaker);
+        throw new Error("Circuit open: email service unavailable");
+      }
 
-
-      // fetch job from Redis
+      /**
+       * 🔍 Fetch job from Redis
+       */
       const storedJob = await redis.get(jobKey);
       if (!storedJob) {
         throw new Error("Job not found in Redis");
       }
 
-      const currentJob = JSON.parse(storedJob);
+      let currentJob = JSON.parse(storedJob);
 
-      // update status → PROCESSING
-      await redis.set(
-        jobKey,
-        JSON.stringify({ ...currentJob, status: "PROCESSING" })
+      /**
+       * 🔄 Update status → PROCESSING
+       */
+      currentJob = await updateJobStatus(
+        redis,
+        currentJob,
+        "PROCESSING"
       );
 
       /**
        * 🌐 Simulate external email service
-       * 40% failure rate to trigger retries + circuit breaker
        */
       if (Math.random() < 0.4) {
-  emailCircuitBreaker.recordFailure();
-  updateCircuitBreakerMetrics(emailCircuitBreaker); // 🔧
-  throw new Error("Simulated email service failure");
-}
+        emailCircuitBreaker.recordFailure();
+        updateCircuitBreakerMetrics(emailCircuitBreaker);
+        throw new Error("Simulated email service failure");
+      }
 
       // simulate work
       await new Promise((res) => setTimeout(res, 2000));
 
-      // success → reset circuit breaker
-    emailCircuitBreaker.recordSuccess();
-updateCircuitBreakerMetrics(emailCircuitBreaker); // 🔧
+      /**
+       * ✅ Success path
+       */
+      emailCircuitBreaker.recordSuccess();
+      updateCircuitBreakerMetrics(emailCircuitBreaker);
 
+      await updateJobStatus(redis, currentJob, "COMPLETED");
 
-      // update status → COMPLETED
-      await redis.set(
-        jobKey,
-        JSON.stringify({ ...currentJob, status: "COMPLETED" })
-      );
-
-      // ✅ metrics
       jobsProcessedTotal.inc();
       endTimer();
 
-      console.log("Job completed:", incomingJob.id);
+      console.log("✅ Job completed:", incomingJob.id);
       channel.ack(msg);
     } catch (err) {
-      console.error("Job failed:", incomingJob.id, err.message);
+      console.error("❌ Job failed:", incomingJob.id, err.message);
 
-      // ❌ metrics
       jobsFailedTotal.inc();
       endTimer();
 
@@ -122,34 +122,29 @@ updateCircuitBreakerMetrics(emailCircuitBreaker); // 🔧
         return;
       }
 
-      const currentJob = JSON.parse(storedJob);
+      let currentJob = JSON.parse(storedJob);
       const retryCount = currentJob.retryCount + 1;
 
       if (retryCount <= currentJob.maxRetries) {
-        await redis.set(
-          jobKey,
-          JSON.stringify({
-            ...currentJob,
-            status: "FAILED",
-            retryCount,
-          })
-        );
+        currentJob = {
+          ...currentJob,
+          retryCount
+        };
+
+        await updateJobStatus(redis, currentJob, "FAILED");
 
         console.log(
-          `Retrying job ${incomingJob.id} (${retryCount}/${currentJob.maxRetries})`
+          `🔁 Retrying job ${incomingJob.id} (${retryCount}/${currentJob.maxRetries})`
         );
 
-        // 🔁 requeue
         channel.nack(msg, false, true);
       } else {
-        await redis.set(
-          jobKey,
-          JSON.stringify({
-            ...currentJob,
-            status: "DEAD_LETTER",
-            retryCount,
-          })
-        );
+        currentJob = {
+          ...currentJob,
+          retryCount
+        };
+
+        await updateJobStatus(redis, currentJob, "DEAD_LETTER");
 
         channel.sendToQueue(
           `${process.env.QUEUE_EMAIL}_dlq`,
