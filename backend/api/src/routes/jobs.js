@@ -1,19 +1,37 @@
 const {
   createJob,
   getJobById,
-  getAllJobs
+  getAllJobs,
+  getJobSummary
 } = require("../services/jobService");
+const { getHealthStatus } = require("../services/healthService");
 
 async function routes(fastify) {
   fastify.post("/jobs", async (request, reply) => {
     const job = await createJob(request.body);
     reply.send(job);
   });
- 
-  fastify.get("/jobs", async () => {
-    return getAllJobs();
+
+  fastify.get("/jobs", async (request) => {
+    const { status, limit, cursor } = request.query;
+    return getAllJobs({ status, limit, cursor });
   });
 
+  // ✅ STATIC route MUST come before dynamic route
+  fastify.get("/jobs/summary", async () => {
+    return getJobSummary();
+  });
+fastify.get("/health", async (request, reply) => {
+  const health = await getHealthStatus();
+
+  if (health.status !== "ok") {
+    reply.code(503); // Service Unavailable
+  }
+
+  return health;
+});
+
+  // ❗ Dynamic route LAST
   fastify.get("/jobs/:id", async (request, reply) => {
     const job = await getJobById(request.params.id);
 
@@ -26,4 +44,4 @@ async function routes(fastify) {
   });
 }
 
-module.exports = routes
+module.exports = routes;

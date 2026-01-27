@@ -160,10 +160,29 @@ async function getAllJobs({
     nextCursor: filtered[filtered.length - 1].createdAt
   };
 }
+async function getJobSummary() {
+  const statuses = [
+    "QUEUED",
+    "PROCESSING",
+    "COMPLETED",
+    "FAILED",
+    "DEAD_LETTER"
+  ];
+
+  const result = {};
+
+  for (const status of statuses) {
+    const count = await redis.zcard(`jobs:status:${status}`);
+    result[status] = count;
+  }
+
+  return result;
+}
 
 
 module.exports = {
   createJob,
   getJobById,
-  getAllJobs
+  getAllJobs,
+  getJobSummary
 };
