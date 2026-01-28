@@ -34,4 +34,18 @@ async function getHealthStatus() {
   return health;
 }
 
-module.exports = { getHealthStatus };
+
+async function getCircuitState() {
+  const state = await redis.get("circuit:email");
+  return {
+    circuit: "email",
+    state: state || "UNKNOWN"
+  };
+}
+
+module.exports = {
+  getHealthStatus,
+  getCircuitState
+};
+
+

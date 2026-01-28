@@ -4,19 +4,29 @@ import {
   fetchCircuitState
 } from "@/lib/api";
 
+type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
+ 
 export default async function Dashboard() {
   const summary = await fetchSummary();
   const health = await fetchHealth();
   const circuit = await fetchCircuitState();
 
-  const isCircuitOpen = circuit.state === "OPEN";
+const circuitState = circuit.state as CircuitState;
+ // CLOSED | OPEN | HALF_OPEN
+
+  const circuitStyles = {
+    CLOSED: "bg-green-100 text-green-700",
+    OPEN: "bg-red-100 text-red-700",
+    HALF_OPEN: "bg-yellow-100 text-yellow-800",
+  } as const;
 
   return (
     <main className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">Job Queue Dashboard</h1>
 
-      {/* System Health */}
+      {/* System Health + Circuit */}
       <div className="p-4 rounded border flex items-center justify-between">
+        {/* Health */}
         <div>
           <span className="font-semibold">System Health:</span>{" "}
           <span
@@ -30,21 +40,19 @@ export default async function Dashboard() {
           </span>
         </div>
 
-        {/* Circuit Breaker Badge */}
+        {/* Circuit Breaker */}
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm">
             Email Circuit:
           </span>
           <span
-            className={`px-3 py-1 rounded-full text-sm font-medium
-              ${
-                isCircuitOpen
-                  ? "bg-red-100 text-red-700"
-                  : "bg-green-100 text-green-700"
-              }
-            `}
+            className={`px-3 py-1 rounded-full text-sm font-medium ${
+              circuitStyles[circuitState] ??
+              "bg-gray-100 text-gray-700"
+            }`}
+            title="Circuit breaker state for email service"
           >
-            {circuit.state}
+            {circuitState}
           </span>
         </div>
       </div>

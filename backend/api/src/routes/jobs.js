@@ -6,7 +6,7 @@ const {
   retryDeadLetterJob
 } = require("../services/jobService");
 
-const { getHealthStatus } = require("../services/healthService");
+const { getHealthStatus, getCircuitState } = require("../services/healthService");
 
 async function routes(fastify) {
   fastify.post("/jobs", async (request, reply) => {
@@ -31,6 +31,9 @@ fastify.get("/health", async (request, reply) => {
   }
 
   return health;
+});
+fastify.get("/circuit", async () => {
+  return getCircuitState();
 });
 
   // ❗ Dynamic route LAST
