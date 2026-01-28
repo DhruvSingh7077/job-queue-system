@@ -2,8 +2,10 @@ const {
   createJob,
   getJobById,
   getAllJobs,
-  getJobSummary
+  getJobSummary,
+  retryDeadLetterJob
 } = require("../services/jobService");
+
 const { getHealthStatus } = require("../services/healthService");
 
 async function routes(fastify) {
@@ -42,6 +44,16 @@ fastify.get("/health", async (request, reply) => {
 
     reply.send(job);
   });
+
+  fastify.post("/jobs/:id/retry", async (request, reply) => {
+  try {
+    const job = await retryDeadLetterJob(request.params.id);
+    reply.send(job);
+  } catch (err) {
+    reply.code(400).send({ error: err.message });
+  }
+});
+
 }
 
 module.exports = routes;

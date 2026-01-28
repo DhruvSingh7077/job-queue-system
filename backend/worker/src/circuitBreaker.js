@@ -1,3 +1,5 @@
+const redis = require("./redis");
+
 class CircuitBreaker {
   constructor({
     failureThreshold = 3,

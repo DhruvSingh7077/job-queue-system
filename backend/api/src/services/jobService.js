@@ -1,65 +1,4 @@
-// const { v4: uuidv4 } = require("uuid");
-// const redis = require("../redis");
-// const { getChannel } = require("../rabbitmq");
-// const {
-//   jobsCreatedCounter,
-//   jobCreationDuration
-// } = require("../metrics");
 
-
-// async function createJob(payload) {
-//    const endTimer = jobCreationDuration.startTimer();
-
-//   const jobId = uuidv4();
-
-//    const job = {
-//     id: jobId,
-//     type: "email",
-//     payload,
-//     status: "PENDING",
-//     retryCount: 0,
-//     maxRetries: 3,
-//     createdAt: new Date().toISOString()
-// };
-//   // store job in redis
-//   await redis.set(`job:${jobId}`, JSON.stringify(job));
- 
-//  // publish job
-//   const channel = getChannel();
-//   channel.sendToQueue(
-//     process.env.QUEUE_EMAIL,
-//     Buffer.from(JSON.stringify(job)),
-//     { persistent: true }
-//   );
-//    jobsCreatedCounter.inc(); //  increment metric
-//   endTimer();               //  record duration
-
-//   return job;
-// }
-// async function getJobById(jobId) {
-//   const job = await redis.get(`job:${jobId}`);
-//   if (!job) return null;
-//   return JSON.parse(job);
-// }
-
-
-// async function getAllJobs() {
-//   const keys = await redis.keys("job:*");
-//   const jobs = [];
-
-//   for (const key of keys) {
-//     const job = await redis.get(key);
-//     jobs.push(JSON.parse(job));
-//   }
-
-//   return jobs;
-// }
-
-// module.exports = {
-//   createJob,
-//   getJobById,
-//   getAllJobs
-// };
 const { v4: uuidv4 } = require("uuid");
 const redis = require("../redis");
 const { getChannel } = require("../rabbitmq");
@@ -178,11 +117,47 @@ async function getJobSummary() {
 
   return result;
 }
+async function retryDeadLetterJob(jobId) {
+  const jobKey = `job:${jobId}`;
+  const jobData = await redis.get(jobKey);
 
+  if (!jobData) {
+    throw new Error("Job not found");
+  }
+
+  const job = JSON.parse(jobData);
+
+  if (job.status !== "DEAD_LETTER") {
+    throw new Error("Only DEAD_LETTER jobs can be retried");
+  }
+
+  const updatedJob = {
+    ...job,
+    status: "QUEUED",
+    retryCount: 0,
+    createdAt: Date.now()
+  };
+
+  await redis.multi()
+    .zrem("jobs:status:DEAD_LETTER", jobId)
+    .zadd("jobs:status:QUEUED", updatedJob.createdAt, jobId)
+    .set(jobKey, JSON.stringify(updatedJob))
+    .exec();
+
+  const channel = getChannel();
+  channel.sendToQueue(
+    process.env.QUEUE_EMAIL,
+    Buffer.from(JSON.stringify(updatedJob)),
+    { persistent: true }
+  );
+
+  return updatedJob;
+}
 
 module.exports = {
   createJob,
   getJobById,
   getAllJobs,
-  getJobSummary
+  getJobSummary,
+  retryDeadLetterJob
 };
