@@ -1,4 +1,5 @@
 import { fetchJobs } from "@/lib/api";
+import StatusBadge from "@/components/StatusBadge";
 
 export default async function JobsPage() {
   const result = await fetchJobs("COMPLETED");
@@ -23,9 +24,10 @@ export default async function JobsPage() {
               <td className="p-2 border text-xs">
                 {job.id}
               </td>
-              <td className="p-2 border">
-                {job.status}
-              </td>
+           <td className="p-2 border">
+  <StatusBadge status={job.status} />
+</td>
+
               <td className="p-2 border">
                 {job.retryCount}
               </td>
