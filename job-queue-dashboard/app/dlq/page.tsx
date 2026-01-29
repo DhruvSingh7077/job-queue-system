@@ -78,7 +78,7 @@ export default function DLQPage() {
       {error && <p className="text-red-600">{error}</p>}
 
       {!loading && jobs.length === 0 && (
-        <p>No dead letter jobs 🎉</p>
+        <p>No dead letter jobs </p>
       )}
 
       {jobs.length > 0 && (

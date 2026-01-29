@@ -48,7 +48,7 @@ const circuitState = circuit.state as CircuitState;
           <span
             className={`px-3 py-1 rounded-full text-sm font-medium ${
               circuitStyles[circuitState] ??
-              "bg-gray-100 text-gray-700"
+              "bg-gray-200 text-gray-700"
             }`}
             title="Circuit breaker state for email service"
           >
