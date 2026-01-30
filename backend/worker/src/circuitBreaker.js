@@ -9,60 +9,104 @@ class CircuitBreaker {
     this.failureThreshold = failureThreshold;
     this.cooldownPeriod = cooldownPeriod;
     this.redisKey = redisKey;
-
-    this.state = "CLOSED"; // CLOSED | OPEN | HALF_OPEN
-    this.failureCount = 0;
-    this.lastFailureTime = null;
-
-    //  persist initial state
-    this.persistState();
   }
 
-  async persistState() {
-    try {
-      await redis.set(this.redisKey, this.state);
-    } catch (err) {
-      console.error("Failed to persist circuit breaker state", err);
+  /**
+   * Load full circuit state from Redis
+   */
+  async _load() {
+    const data = await redis.get(this.redisKey);
+    if (!data) {
+      return {
+        state: "CLOSED",
+        failureCount: 0,
+        lastFailureTime: 0,
+      };
     }
+    return JSON.parse(data);
   }
 
+  /**
+   * Persist full circuit state
+   */
+  async _save(state) {
+    await redis.set(this.redisKey, JSON.stringify(state));
+  }
 
-  canRequest() {
-    if (this.state === "OPEN") {
-      const now = Date.now();
+  /**
+   * Can a request pass?
+   */
+  async canRequest() {
+    const now = Date.now();
+    const circuit = await this._load();
 
-      if (now - this.lastFailureTime > this.cooldownPeriod) {
-        this.state = "HALF_OPEN";
-        this.persistState(); 
-        return true;
+    if (circuit.state === "OPEN") {
+      if (now - circuit.lastFailureTime >= this.cooldownPeriod) {
+        // Move to HALF_OPEN
+        circuit.state = "HALF_OPEN";
+        circuit.halfOpenInProgress = false;
+        await this._save(circuit);
+        return this.canRequest();
       }
-
       return false;
     }
-    return true;
-  }
 
-recordSuccess() {
-    this.failureCount = 0;
-    this.state = "CLOSED";
-    this.persistState(); 
-  }
-
-  recordFailure() {
-    this.failureCount += 1;
-    this.lastFailureTime = Date.now();
-
-    if (this.failureCount >= this.failureThreshold) {
-      if (this.state !== "OPEN") {
-        console.log("🚨 Circuit opened");
+    if (circuit.state === "HALF_OPEN") {
+      if (circuit.halfOpenInProgress) {
+        return false;
       }
-      this.state = "OPEN";
-      this.persistState(); 
+
+      // 🔒 Distributed lock for probe request
+      circuit.halfOpenInProgress = true;
+      await this._save(circuit);
+      return true;
     }
+
+    return true; // CLOSED
   }
 
-  getState() {
-    return this.state;
+  /**
+   * Record success
+   */
+  async recordSuccess() {
+    const circuit = await this._load();
+
+    circuit.state = "CLOSED";
+    circuit.failureCount = 0;
+    circuit.lastFailureTime = 0;
+    circuit.halfOpenInProgress = false;
+
+    await this._save(circuit);
+  }
+
+  /**
+   * Record failure
+   */
+  async recordFailure() {
+    const circuit = await this._load();
+
+    circuit.failureCount += 1;
+    circuit.lastFailureTime = Date.now();
+
+    if (
+      circuit.state === "HALF_OPEN" ||
+      circuit.failureCount >= this.failureThreshold
+    ) {
+      circuit.state = "OPEN";
+    }
+
+    circuit.halfOpenInProgress = false;
+    await this._save(circuit);
+
+    console.log("🚨 Circuit state:", circuit.state);
+  }
+
+  /**
+   * Get current circuit state
+   */
+  async getState() {
+    const circuit = await this._load();
+    return circuit.state;
   }
 }
 

@@ -135,7 +135,8 @@ async function retryDeadLetterJob(jobId) {
     ...job,
     status: "QUEUED",
     retryCount: 0,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    forceRetry: true
   };
 
   await redis.multi()

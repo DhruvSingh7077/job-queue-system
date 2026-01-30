@@ -6,7 +6,7 @@ async function getHealthStatus() {
     status: "ok",
     redis: "unknown",
     rabbitmq: "unknown",
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 
   // 🔴 Redis check
@@ -34,18 +34,41 @@ async function getHealthStatus() {
   return health;
 }
 
-
+/**
+ * Circuit breaker state (Redis-backed)
+ */
 async function getCircuitState() {
-  const state = await redis.get("circuit:email");
+  const raw = await redis.get("circuit:email");
+
+  if (!raw) {
+    return {
+      circuit: "email",
+      state: "CLOSED",
+    };
+  }
+
+  const data = JSON.parse(raw);
+  const now = Date.now();
+
+  // 🔥 Derive HALF_OPEN dynamically
+  if (
+    data.state === "OPEN" &&
+    now - data.lastFailureTime >= 15000
+  ) {
+    return {
+      circuit: "email",
+      state: "HALF_OPEN",
+    };
+  }
+
   return {
     circuit: "email",
-    state: state || "UNKNOWN"
+    state: data.state,
   };
 }
 
+
 module.exports = {
   getHealthStatus,
-  getCircuitState
+  getCircuitState,
 };
-
-
