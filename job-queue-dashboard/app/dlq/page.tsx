@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
   fetchJobs,
   retryJob,
-  fetchCircuitState
+  fetchCircuitState,
 } from "@/lib/api";
 
 type Job = {
@@ -18,24 +18,25 @@ type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
 
 export default function DLQPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [circuitState, setCircuitState] = useState<CircuitState>("CLOSED");
+  const [circuitState, setCircuitState] =
+    useState<CircuitState>("CLOSED");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     try {
       setLoading(true);
+      setError(null);
+
       const [jobsRes, circuitRes] = await Promise.all([
         fetchJobs("DEAD_LETTER"),
         fetchCircuitState(),
-        console.log("Fetching DLQ from", process.env.NEXT_PUBLIC_API_URL)
-
       ]);
 
       setJobs(jobsRes.data || []);
       setCircuitState(circuitRes.state as CircuitState);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Failed to load DLQ");
     } finally {
       setLoading(false);
     }
@@ -44,9 +45,9 @@ export default function DLQPage() {
   async function handleRetry(jobId: string) {
     try {
       await retryJob(jobId);
-      await load(); // refresh list
+      await load();
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || "Retry failed");
     }
   }
 
@@ -54,7 +55,17 @@ export default function DLQPage() {
     load();
   }, []);
 
-  const retryDisabled = circuitState === "OPEN";
+  /**
+   * 🔒 Retry allowed ONLY during HALF_OPEN
+   */
+  const canRetry = circuitState === "HALF_OPEN";
+
+  const circuitColor =
+    circuitState === "OPEN"
+      ? "text-red-600"
+      : circuitState === "HALF_OPEN"
+      ? "text-yellow-500"
+      : "text-green-600";
 
   return (
     <main className="p-6 space-y-6">
@@ -63,13 +74,7 @@ export default function DLQPage() {
       {/* Circuit info */}
       <div className="text-sm">
         Email Circuit:{" "}
-        <span
-          className={
-            circuitState === "OPEN"
-              ? "text-red-600"
-              : "text-green-600"
-          }
-        >
+        <span className={circuitColor}>
           {circuitState}
         </span>
       </div>
@@ -78,51 +83,57 @@ export default function DLQPage() {
       {error && <p className="text-red-600">{error}</p>}
 
       {!loading && jobs.length === 0 && (
-        <p>No dead letter jobs </p>
+        <p>No dead letter jobs 🎉</p>
       )}
 
       {jobs.length > 0 && (
-        <table className="w-full border border-collapse">
-          <thead>
-            <tr className="bg-gray-900">
-              <th className="border p-2">Job ID</th>
-              <th className="border p-2">Retries</th>
-              <th className="border p-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((job) => (
-              <tr key={job.id}>
-                <td className="border p-2 text-xs">
-                  {job.id}
-                </td>
-                <td className="border p-2 text-center">
-                  {job.retryCount}/{job.maxRetries}
-                </td>
-                <td className="border p-2 text-center">
-                  <button
-                    disabled={retryDisabled}
-                    onClick={() => handleRetry(job.id)}
-                    className={`px-3 py-1 rounded text-white
-                      ${
-                        retryDisabled
-                          ? "bg-gray-500 cursor-not-allowed"
-                          : "bg-green-600 hover:bg-green-700"
-                      }
-                    `}
-                    title={
-                      retryDisabled
-                        ? "Retry disabled: circuit breaker OPEN"
-                        : "Retry job"
-                    }
-                  >
-                    Retry
-                  </button>
-                </td>
+        <>
+          {!canRetry && (
+            <p className="text-sm text-gray-400">
+              Retry enabled only when circuit is HALF_OPEN
+            </p>
+          )}
+
+          <table className="w-full border border-collapse">
+            <thead>
+              <tr className="bg-gray-900">
+                <th className="border p-2">Job ID</th>
+                <th className="border p-2">Retries</th>
+                <th className="border p-2">Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <tr key={job.id}>
+                  <td className="border p-2 text-xs">
+                    {job.id}
+                  </td>
+                  <td className="border p-2 text-center">
+                    {job.retryCount}/{job.maxRetries}
+                  </td>
+                  <td className="border p-2 text-center">
+                    <button
+                      disabled={!canRetry}
+                      onClick={() => handleRetry(job.id)}
+                      className={`px-3 py-1 rounded text-white ${
+                        canRetry
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-500 cursor-not-allowed"
+                      }`}
+                      title={
+                        canRetry
+                          ? "Retry job (HALF_OPEN probe)"
+                          : `Retry disabled: circuit is ${circuitState}`
+                      }
+                    >
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
     </main>
   );

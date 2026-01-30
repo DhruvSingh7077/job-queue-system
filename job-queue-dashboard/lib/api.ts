@@ -82,3 +82,27 @@ export async function fetchHealth() {
 
   return res.json();
 }
+export async function createJob(payload: {
+  to: string;
+  message: string;
+}) {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/jobs`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        type: "email",
+        payload,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to create job");
+  }
+
+  return res.json();
+}
