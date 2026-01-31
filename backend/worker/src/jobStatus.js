@@ -1,18 +1,23 @@
 async function updateJobStatus(redis, job, newStatus) {
   const oldStatus = job.status;
   const jobId = job.id;
-  const createdAt = job.createdAt;
+  const timestamp = Date.now();
 
   const updatedJob = {
     ...job,
-    status: newStatus
+    status: newStatus,
+    updatedAt: timestamp,
   };
 
-  await redis.multi()
+  await redis
+    .multi()
     .zrem(`jobs:status:${oldStatus}`, jobId)
-    .zadd(`jobs:status:${newStatus}`, createdAt, jobId)
+    .zadd(`jobs:status:${newStatus}`, timestamp, jobId)
     .set(`job:${jobId}`, JSON.stringify(updatedJob))
     .exec();
+
+  // 🔥 CRITICAL: mutate original reference
+  job.status = newStatus;
 
   return updatedJob;
 }
