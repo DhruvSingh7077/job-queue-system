@@ -4,15 +4,15 @@ type Props = {
 
 const STATUS_STYLES: Record<string, string> = {
   QUEUED:
-    "bg-blue-100 text-blue-700 ring-1 ring-blue-200",
+    "bg-blue-50 text-blue-700 ring-blue-200",
   PROCESSING:
-    "bg-amber-100 text-amber-700 ring-1 ring-amber-200 animate-pulse",
+    "bg-amber-50 text-amber-700 ring-amber-200 animate-pulse",
   COMPLETED:
-    "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+    "bg-emerald-50 text-emerald-700 ring-emerald-200",
   FAILED:
-    "bg-red-100 text-red-700 ring-1 ring-red-200",
+    "bg-red-50 text-red-700 ring-red-200",
   DEAD_LETTER:
-    "bg-purple-100 text-purple-700 ring-1 ring-purple-200",
+    "bg-purple-50 text-purple-700 ring-purple-200",
 };
 
 export default function StatusBadge({ status }: Props) {
@@ -20,12 +20,14 @@ export default function StatusBadge({ status }: Props) {
     <span
       className={`
         inline-flex items-center
-        px-3 py-1
+        px-3 py-1.5
         rounded-full
         text-xs font-semibold
+        ring-1
         shadow-sm
-        transition
-        ${STATUS_STYLES[status] || "bg-gray-100 text-gray-700 ring-1 ring-gray-200"}
+        transition-all
+        hover:scale-105
+        ${STATUS_STYLES[status] || "bg-gray-50 text-gray-700 ring-gray-200"}
       `}
     >
       {status}

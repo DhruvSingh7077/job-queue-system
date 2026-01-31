@@ -18,14 +18,31 @@ export async function fetchSummary() {
 /**
  * Fetch jobs (optionally by status)
  */
-export async function fetchJobs(status?: string) {
-  const url = status
-    ? `${API_URL}/jobs?status=${status}`
-    : `${API_URL}/jobs`;
+// export async function fetchJobs(status?: string) {
+//   const url = status
+//     ? `${API_URL}/jobs?status=${status}`
+//     : `${API_URL}/jobs`;
 
-  const res = await fetch(url, {
-    cache: "no-store",
-  });
+//   const res = await fetch(url, {
+//     cache: "no-store",
+//   });
+
+//   if (!res.ok) {
+//     throw new Error("Failed to fetch jobs");
+//   }
+
+//   return res.json();
+// }
+/**
+ * Fetch jobs by status (default: PROCESSING)
+ */
+export async function fetchJobs(status: string = "PROCESSING") {
+  const res = await fetch(
+    `${API_URL}/jobs?status=${status}&limit=10`,
+    {
+      cache: "no-store",
+    }
+  );
 
   if (!res.ok) {
     throw new Error("Failed to fetch jobs");
@@ -33,6 +50,7 @@ export async function fetchJobs(status?: string) {
 
   return res.json();
 }
+
 
 /**
  * Retry a DEAD_LETTER job
