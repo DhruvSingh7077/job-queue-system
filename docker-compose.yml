@@ -3,7 +3,6 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"
       - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: admin
@@ -16,8 +15,6 @@ services:
 
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
 
   api:
     build: ./backend/api
@@ -34,7 +31,7 @@ services:
   worker:
     build: ./backend/worker
     ports:
-      - "4000:4000"   # 🔥 REQUIRED FOR PROMETHEUS
+      - "4000:4000"   
     env_file:
       - ./backend/worker/.env
     depends_on:
