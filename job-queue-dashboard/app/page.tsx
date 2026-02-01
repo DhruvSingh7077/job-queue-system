@@ -1,267 +1,4 @@
-// "use client";
 
-// import { useEffect, useState } from "react";
-// import {
-//   fetchSummary,
-//   fetchHealth,
-//   fetchCircuitState,
-//   fetchJobs,
-//   createJob,
-// } from "@/lib/api";
-
-// type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
-
-// export default function Dashboard() {
-//   /* ---------- STATE ---------- */
-//   const [summary, setSummary] = useState<any>(null);
-//   const [health, setHealth] = useState<any>(null);
-//   const [circuit, setCircuit] = useState<any>(null);
-//   const [jobs, setJobs] = useState<any[]>([]);
-
-//   const [to, setTo] = useState("");
-//   const [message, setMessage] = useState("");
-//   const [loading, setLoading] = useState(false);
-
-//   /* ---------- DATA LOADER ---------- */
-//   async function loadData() {
-//     try {
-//       const [s, h, c, j] = await Promise.all([
-//         fetchSummary(),
-//         fetchHealth(),
-//         fetchCircuitState(),
-//         fetchJobs(),
-//       ]);
-
-//       setSummary(s);
-//       setHealth(h);
-//       setCircuit(c);
-//       setJobs(jobs.slice(0, 10)); // FIXED
-//     } catch (err) {
-//       console.error("Polling failed", err);
-//     }
-//   }
-
-//   /* ---------- POLLING ---------- */
-//   useEffect(() => {
-//     let interval: NodeJS.Timeout;
-
-//     async function startPolling() {
-//       await loadData();
-//       interval = setInterval(loadData, 5000);
-//     }
-
-//     function stopPolling() {
-//       if (interval) clearInterval(interval);
-//     }
-
-//     function handleVisibilityChange() {
-//       if (document.hidden) stopPolling();
-//       else startPolling();
-//     }
-
-//     document.addEventListener("visibilitychange", handleVisibilityChange);
-//     startPolling();
-
-//     return () => {
-//       stopPolling();
-//       document.removeEventListener(
-//         "visibilitychange",
-//         handleVisibilityChange
-//       );
-//     };
-//   }, []);
-
-//   /* ---------- JOB SUBMISSION ---------- */
-//   async function handleSubmit(e: React.FormEvent) {
-//     e.preventDefault();
-//     setLoading(true);
-
-//     try {
-//       await createJob({ to, message });
-//       setTo("");
-//       setMessage("");
-//       await loadData();
-//     } catch {
-//       alert("Failed to create job");
-//     } finally {
-//       setLoading(false);
-//     }
-//   }
-
-//   if (!summary || !health || !circuit) {
-//     return <div className="p-8 text-slate-500">Loading dashboard…</div>;
-//   }
-
-//   const circuitState = circuit.state as CircuitState;
-
-//   const circuitStyles = {
-//     CLOSED: "bg-green-50 text-green-700 ring-green-200",
-//     OPEN: "bg-red-50 text-red-700 ring-red-200",
-//     HALF_OPEN: "bg-yellow-50 text-yellow-800 ring-yellow-200",
-//   } as const;
-
-//   return (
-//     <main className="space-y-8">
-//       {/* Header */}
-//       <div>
-//         <h1 className="text-3xl font-bold tracking-tight text-slate-800">
-//           Job Queue Dashboard
-//         </h1>
-//         <p className="text-slate-500 text-sm">
-//           Monitor system health, queues and job processing in real-time.
-//         </p>
-//       </div>
-
-//       {/* Create Job */}
-//       <form
-//         onSubmit={handleSubmit}
-//         className="p-6 rounded-xl border bg-white shadow-sm space-y-4"
-//       >
-//         <h2 className="font-semibold text-slate-700">Create Email Job</h2>
-
-//         <input
-//           className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition"
-//           placeholder="Recipient email"
-//           value={to}
-//           onChange={(e) => setTo(e.target.value)}
-//           required
-//         />
-
-//         <textarea
-//           className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition"
-//           placeholder="Message"
-//           value={message}
-//           onChange={(e) => setMessage(e.target.value)}
-//           required
-//         />
-
-//         <button
-//           type="submit"
-//           disabled={loading || circuitState === "OPEN"}
-//           className="px-5 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium shadow hover:scale-105 transition disabled:opacity-40"
-//         >
-//           {loading
-//             ? "Creating..."
-//             : circuitState === "OPEN"
-//             ? "Circuit Open"
-//             : "Create Job"}
-//         </button>
-//       </form>
-
-//       {/* Health + Circuit */}
-//       <div className="p-5 rounded-xl border bg-white shadow-sm flex items-center justify-between">
-//         <div>
-//           <span className="font-semibold text-slate-700">
-//             System Health:
-//           </span>{" "}
-//           <span
-//             className={
-//               health.status === "ok"
-//                 ? "text-green-600 font-medium"
-//                 : "text-red-600 font-medium"
-//             }
-//           >
-//             {health.status.toUpperCase()}
-//           </span>
-//         </div>
-
-//         <div className="flex items-center gap-2">
-//           <span className="text-sm font-semibold text-slate-600">
-//             Email Circuit:
-//           </span>
-//           <span
-//             className={`px-3 py-1.5 rounded-full text-xs font-semibold ring-1 ${circuitStyles[circuitState]}`}
-//           >
-//             {circuitState}
-//           </span>
-//         </div>
-//       </div>
-
-//       {/* Summary Cards */}
-//       <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-//         {Object.entries(summary).map(([key, value]) => {
-//           const isDLQ = key === "DEAD_LETTER";
-
-//           const card = (
-//             <div
-//               className={`p-6 rounded-xl border bg-white shadow-sm text-center
-//               hover:shadow-md hover:-translate-y-1 transition
-//               ${isDLQ ? "cursor-pointer hover:border-blue-500" : ""}`}
-//             >
-//               <div className="text-xs uppercase tracking-wide text-slate-500">
-//                 {key}
-//               </div>
-//               <div className="text-3xl font-bold text-slate-800">
-//                 {value as number}
-//               </div>
-//             </div>
-//           );
-
-//           return isDLQ ? (
-//             <a key={key} href="/dlq">
-//               {card}
-//             </a>
-//           ) : (
-//             <div key={key}>{card}</div>
-//           );
-//         })}
-//       </div>
-
-//       {/* Live Jobs */}
-//       <div className="border rounded-xl p-6 bg-white shadow-sm">
-//         <h2 className="font-semibold mb-4 text-slate-700">
-//           Live Jobs (last 10)
-//         </h2>
-
-//         <table className="w-full text-sm border-collapse">
-//           <thead>
-//             <tr className="border-b text-xs uppercase tracking-wide text-slate-500">
-//               <th className="p-2 text-left">Job</th>
-//               <th className="p-2 text-left">Status</th>
-//               <th className="p-2 text-left">Retries</th>
-//               <th className="p-2 text-left">Created</th>
-//             </tr>
-//           </thead>
-
-//           <tbody>
-//             {jobs.map((job) => (
-//               <tr
-//                 key={job.id}
-//                 className="border-b hover:bg-slate-50 transition"
-//               >
-//                 <td className="p-2 font-mono text-xs">
-//                   {job.id.slice(0, 8)}…
-//                 </td>
-//                 <td className="p-2">
-//                   <span
-//                     className={`px-2 py-1 rounded-full text-xs font-medium
-//                       ${
-//                         job.status === "COMPLETED"
-//                           ? "bg-green-50 text-green-700"
-//                           : job.status === "FAILED"
-//                           ? "bg-orange-50 text-orange-700"
-//                           : job.status === "DEAD_LETTER"
-//                           ? "bg-red-50 text-red-700"
-//                           : "bg-gray-50 text-gray-700"
-//                       }`}
-//                   >
-//                     {job.status}
-//                   </span>
-//                 </td>
-//                 <td className="p-2">
-//                   {job.retryCount}/{job.maxRetries}
-//                 </td>
-//                 <td className="p-2">
-//                   {new Date(job.createdAt).toLocaleTimeString()}
-//                 </td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       </div>
-//     </main>
-//   );
-// }
 "use client";
 
 import { useEffect, useState } from "react";
@@ -289,27 +26,38 @@ export default function Dashboard() {
   /* ---------- DATA LOADER ---------- */
   async function loadData() {
     try {
-      const [s, h, c, j] = await Promise.all([
-        fetchSummary(),
-        fetchHealth(),
-        fetchCircuitState(),
-        fetchJobs(),
-      ]);
+      const [
+  s,
+  h,
+  c,
+  queued,
+  processing,
+  failed,
+] = await Promise.all([
+  fetchSummary(),
+  fetchHealth(),
+  fetchCircuitState(),
+  fetchJobs("QUEUED"),
+  fetchJobs("PROCESSING"),
+  fetchJobs("FAILED"),
+]);
+
+const liveJobs = [
+  ...(queued?.data || []),
+  ...(processing?.data || []),
+  ...(failed?.data || []),
+]
+  .sort((a, b) => b.createdAt - a.createdAt)
+  .slice(0, 10);
+
+setJobs(liveJobs);
+
 
       setSummary(s);
       setHealth(h);
       setCircuit(c);
 
-      // SAFE JOBS HANDLING
-     const jobArray =
-  Array.isArray(j)
-    ? j
-    : Array.isArray(j?.data)
-    ? j.data
-    : [];
-
-setJobs(jobArray.slice(0, 10));
-
+     
     } catch (err) {
       console.error("Polling failed", err);
     }
@@ -317,10 +65,49 @@ setJobs(jobArray.slice(0, 10));
 
   /* ---------- POLLING ---------- */
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  let interval: NodeJS.Timeout | null = null;
+
+  function startPolling() {
+    if (!interval) {
+      loadData();
+      interval = setInterval(loadData, 5000);
+    }
+  }
+
+  function stopPolling() {
+    if (interval) {
+      clearInterval(interval);
+      interval = null;
+    }
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === "visible") {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  }
+
+  // Initial state
+  if (document.visibilityState === "visible") {
+    startPolling();
+  }
+
+  document.addEventListener(
+    "visibilitychange",
+    handleVisibilityChange
+  );
+
+  return () => {
+    stopPolling();
+    document.removeEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+  };
+}, []);
+
 
   /* ---------- JOB SUBMISSION ---------- */
   async function handleSubmit(e: React.FormEvent) {
