@@ -3,7 +3,7 @@ const redis = require("./redis");
 class CircuitBreaker {
   constructor({
     failureThreshold = 3,
-    cooldownPeriod = 15000,
+    cooldownPeriod = 10000,
     redisKey = "circuit:email",
   } = {}) {
     this.failureThreshold = failureThreshold;

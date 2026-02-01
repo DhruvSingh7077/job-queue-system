@@ -127,7 +127,7 @@ async function startWorker() {
       await updateJobStatus(redis, currentJob, "PROCESSING");
 
       // Simulated email service
-      if (Math.random() < 0.9) {
+      if (Math.random() < 0.4) {
         throw new Error("Simulated email service failure");
       }
 
