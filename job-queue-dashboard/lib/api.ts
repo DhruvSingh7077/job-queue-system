@@ -1,6 +1,5 @@
 const API_URL = "/api/proxy";
 
-
 /**
  * Job summary counts
  */
@@ -15,7 +14,6 @@ export async function fetchSummary() {
 
   return res.json();
 }
-
 
 /**
  * Fetch jobs by status (default: PROCESSING)
@@ -34,7 +32,6 @@ export async function fetchJobs(status: string = "PROCESSING") {
 
   return res.json();
 }
-
 
 /**
  * Retry a DEAD_LETTER job
@@ -84,23 +81,24 @@ export async function fetchHealth() {
 
   return res.json();
 }
+
+/**
+ * Create a new job
+ */
 export async function createJob(payload: {
   to: string;
   message: string;
 }) {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/jobs`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        type: "email",
-        payload,
-      }),
-    }
-  );
+  const res = await fetch(`${API_URL}/jobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      type: "email",
+      payload,
+    }),
+  });
 
   if (!res.ok) {
     throw new Error("Failed to create job");

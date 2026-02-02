@@ -9,10 +9,16 @@ const { client } = require("./metrics");
 async function start() {
   await connectRabbitMQ();
 
-  // Enable CORS ( browser -> Api)
-await fastify.register(require("@fastify/cors"), {
-  origin: true,
-});
+  // Enable CORS (browser -> API)
+  await fastify.register(require("@fastify/cors"), {
+    origin: [
+      "http://localhost:3000",
+      "https://job-queue-system.vercel.app", // Replace with your actual Vercel URL
+      /\.vercel\.app$/ // Allow all Vercel preview deployments
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  });
 
 
   // register routes
