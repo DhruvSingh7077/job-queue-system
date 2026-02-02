@@ -11,11 +11,9 @@ async function start() {
 
   // Enable CORS ( browser -> Api)
 await fastify.register(require("@fastify/cors"), {
-    origin: [
-      "http://localhost:3002", // frontend
-    ],
-    methods: ["GET", "POST"],
-  });
+  origin: true,
+});
+
 
   // register routes
   fastify.register(jobRoutes);
