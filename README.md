@@ -6,8 +6,7 @@ A scalable **Job Queue System** that allows scheduling and processing of backgro
 
 ## 🌐 Live Demo
 
-🚀 Frontend: https://your-frontend.vercel.app
-⚙️ Backend API: http://your-ec2-public-ip
+🚀 Try Here: [https://your-frontend.vercel.app](https://job-queue-system.vercel.app/)
 
 ---
 
@@ -87,9 +86,6 @@ This system ensures:
 
 ---
 
-## 📸 Screenshots
-
-*Add your dashboard / grafana / UI screenshots here*
 
 ---
 
@@ -176,7 +172,7 @@ Dhruv Singh
 
 ---
 
-## ⭐ Why This Project Stands Out
+## ⭐ Why This Project is advanced
 
 * Real-world backend architecture
 * Production-grade patterns (Circuit Breaker, DLQ)
